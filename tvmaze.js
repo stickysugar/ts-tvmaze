@@ -12778,7 +12778,7 @@ var $ = __webpack_require__(/*! jquery */ "./node_modules/jquery/dist/jquery.js"
 var $showsList = $("#showsList");
 var $episodesArea = $("#episodesArea");
 var $searchForm = $("#searchForm");
-var TVMAZE_BASE_URL = "https://api.tvmaze.com/";
+var TV_MAZE_BASE_URL = "https://api.tvmaze.com/";
 var TV_MISSING_IMG = "https://tinyurl.com/missing-tv";
 /** Given a search term, search for tv shows that match that query.
  *
@@ -12788,36 +12788,36 @@ var TV_MISSING_IMG = "https://tinyurl.com/missing-tv";
  */
 function getShowsByTerm(term) {
     return __awaiter(this, void 0, void 0, function () {
-        var response, shows, _i, response_1, resp, show, show;
+        var results, shows;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, axios_1.default.get("".concat(TVMAZE_BASE_URL, "search/shows?q=").concat(term))];
+                case 0: return [4 /*yield*/, (0, axios_1.default)({
+                        url: "".concat(TV_MAZE_BASE_URL, "search/shows?q=").concat(term),
+                        method: "get",
+                    })];
                 case 1:
-                    response = _a.sent();
-                    for (_i = 0, response_1 = response; _i < response_1.length; _i++) {
-                        resp = response_1[_i];
-                        show = resp.show;
-                        show = {
-                            id: resp.show.id,
-                            name: resp.show.name,
-                            summary: resp.show.summary,
-                            image: resp.show.image || TV_MISSING_IMG
+                    results = _a.sent();
+                    shows = results.data.map(function (result) {
+                        var _a;
+                        var show = result.show;
+                        return {
+                            id: show.id,
+                            name: show.name,
+                            summary: show.summary,
+                            image: ((_a = show.image) === null || _a === void 0 ? void 0 : _a.medium) || TV_MISSING_IMG,
                         };
-                    }
+                    });
                     return [2 /*return*/, shows];
             }
         });
     });
 }
-/** Given list of shows, create markup for each and to DOM */
+/** Given list of shows, create markup for each and add to DOM */
 function populateShows(shows) {
     $showsList.empty();
     for (var _i = 0, shows_1 = shows; _i < shows_1.length; _i++) {
         var show = shows_1[_i];
-        if (typeof show.show.image.medium === null) {
-            show.show.image.medium = TV_MISSING_IMG;
-        }
-        var $show = $("<div data-show-id=\"".concat(show.show.id, "\" class=\"Show col-md-12 col-lg-6 mb-4\">\n         <div class=\"media\">\n           <img\n              src=").concat(show.show.image.medium, "\n              alt=").concat(show.show.name, "\n              class=\"w-25 me-3\">\n           <div class=\"media-body\">\n             <h5 class=\"text-primary\">").concat(show.show.name, "</h5>\n             <div><small>").concat(show.show.summary, "</small></div>\n             <button class=\"btn btn-outline-light btn-sm Show-getEpisodes\">\n               Episodes\n             </button>\n           </div>\n         </div>\n       </div>\n      "));
+        var $show = $("<div data-show-id=\"".concat(show.id, "\" class=\"Show col-md-12 col-lg-6 mb-4\">\n         <div class=\"media\">\n           <img\n              src=").concat(show.image, "\n              alt=").concat(show.name, "\n              class=\"w-25 me-3\">\n           <div class=\"media-body\">\n             <h5 class=\"text-primary\">").concat(show.name, "</h5>\n             <div><small>").concat(show.summary, "</small></div>\n             <button class=\"btn btn-outline-light btn-sm Show-getEpisodes\" data-show-id=\"").concat(show.id, "\">\n               Episodes\n             </button>\n           </div>\n         </div>\n       </div>\n      "));
         $showsList.append($show);
     }
 }
@@ -12858,9 +12858,73 @@ $searchForm.on("submit", function (evt) {
 /** Given a show ID, get from API and return (promise) array of episodes:
  *      { id, name, season, number }
  */
-// async function getEpisodesOfShow(id) { }
-/** Write a clear docstring for this function... */
-// function populateEpisodes(episodes) { }
+function getEpisodesOfShow(id) {
+    return __awaiter(this, void 0, void 0, function () {
+        var results, episodes;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0: return [4 /*yield*/, (0, axios_1.default)({
+                        url: "".concat(TV_MAZE_BASE_URL, "shows/").concat(id, "/episodes"),
+                        method: "get",
+                    })];
+                case 1:
+                    results = _a.sent();
+                    episodes = results.data.map(function (result) {
+                        return {
+                            id: result.id,
+                            name: result.name,
+                            season: result.season,
+                            number: result.number,
+                        };
+                    });
+                    return [2 /*return*/, episodes];
+            }
+        });
+    });
+}
+/** Given list of episodes like [{ id, name, season, number },...],
+ * create markup for each and add to DOM */
+function populateEpisodes(episodes) {
+    $episodesArea.empty();
+    for (var _i = 0, episodes_1 = episodes; _i < episodes_1.length; _i++) {
+        var episode = episodes_1[_i];
+        var $episode = $("<li>".concat(episode.name, " (season ").concat(episode.season, ", number ").concat(episode.number, ")</li>"));
+        $episodesArea.append($episode);
+    }
+    $episodesArea.show();
+}
+/** handler to call API to get episodes and display them on the DOM */
+function episodesHandler(evt) {
+    return __awaiter(this, void 0, void 0, function () {
+        var showId, episodes;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    showId = evt.target.getAttribute("data-show-id");
+                    return [4 /*yield*/, getEpisodesOfShow(showId)];
+                case 1:
+                    episodes = _a.sent();
+                    populateEpisodes(episodes);
+                    return [2 /*return*/];
+            }
+        });
+    });
+}
+/** event listener for Get Episodes buttons */
+$showsList.on("click", ".Show-getEpisodes", function (evt) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    evt.preventDefault();
+                    return [4 /*yield*/, episodesHandler(evt)];
+                case 1:
+                    _a.sent();
+                    return [2 /*return*/];
+            }
+        });
+    });
+});
 
 
 /***/ })

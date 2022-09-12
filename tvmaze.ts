@@ -1,19 +1,32 @@
 import axios from "axios";
-import * as $ from 'jquery';
+import * as $ from "jquery";
 
 const $showsList = $("#showsList");
 const $episodesArea = $("#episodesArea");
 const $searchForm = $("#searchForm");
 
-const TVMAZE_BASE_URL = "https://api.tvmaze.com/";
+const TV_MAZE_BASE_URL = "https://api.tvmaze.com/";
 const TV_MISSING_IMG = "https://tinyurl.com/missing-tv";
-
 
 interface ShowInterface {
   id: number;
   name: string;
   summary: string;
+}
+
+interface ShowFromApiInterface extends ShowInterface {
+  image: { medium: string } | null;
+}
+
+interface ShowOutputInterface extends ShowInterface {
   image: string;
+}
+
+interface EpisodeInterface {
+  id: number;
+  name: string;
+  season: number;
+  number: number;
 }
 
 /** Given a search term, search for tv shows that match that query.
@@ -23,71 +36,63 @@ interface ShowInterface {
  *    (if no image URL given by API, put in a default image URL)
  */
 
-async function getShowsByTerm(term: string): Promise<ShowInterface[]> {
-  // ADD: Remove placeholder & make request to TVMaze search shows API.
+async function getShowsByTerm(term: string): Promise<ShowOutputInterface[]> {
+  const results = await axios({
+    url: `${TV_MAZE_BASE_URL}search/shows?q=${term}`,
+    method: "get",
+  });
 
-  const response = await axios.get(`${TVMAZE_BASE_URL}search/shows?q=${term}`);
+  let shows: ShowOutputInterface[] = results.data.map(
+    (result: { show: ShowFromApiInterface }): ShowOutputInterface => {
+      let show = result.show;
 
-  // if (typeof response === ) {
+      return {
+        id: show.id,
+        name: show.name,
+        summary: show.summary,
+        image: show.image?.medium || TV_MISSING_IMG,
+      };
+    }
+  );
 
-  // }
-
-  let shows: ShowInterface[];
-
-  for (let resp of response) {
-    let show = resp.show;
-      let show: ShowInterface = {
-        id: resp.show.id,
-        name: resp.show.name,
-        summary: resp.show.summary,
-        image: resp.show.image || TV_MISSING_IMG
-      }
-  }
   return shows;
 }
 
+/** Given list of shows, create markup for each and add to DOM */
 
-/** Given list of shows, create markup for each and to DOM */
-
-function populateShows(shows: Object[]): void {
+function populateShows(shows: ShowOutputInterface[]): void {
   $showsList.empty();
 
-
   for (let show of shows) {
-
-    if (typeof show.show.image.medium === null) {
-      show.show.image.medium = TV_MISSING_IMG;
-    }
-
     const $show = $(
-      `<div data-show-id="${show.show.id}" class="Show col-md-12 col-lg-6 mb-4">
+      `<div data-show-id="${show.id}" class="Show col-md-12 col-lg-6 mb-4">
          <div class="media">
            <img
-              src=${show.show.image.medium}
-              alt=${show.show.name}
+              src=${show.image}
+              alt=${show.name}
               class="w-25 me-3">
            <div class="media-body">
-             <h5 class="text-primary">${show.show.name}</h5>
-             <div><small>${show.show.summary}</small></div>
-             <button class="btn btn-outline-light btn-sm Show-getEpisodes">
+             <h5 class="text-primary">${show.name}</h5>
+             <div><small>${show.summary}</small></div>
+             <button class="btn btn-outline-light btn-sm Show-getEpisodes" data-show-id="${show.id}">
                Episodes
              </button>
            </div>
          </div>
        </div>
-      `);
+      `
+    );
 
     $showsList.append($show);
   }
 }
 
-
 /** Handle search form submission: get shows from API and display.
  *    Hide episodes area (that only gets shown if they ask for episodes)
  */
 
-async function searchForShowAndDisplay() {
-  const term = $("#searchForm-term").val();
+async function searchForShowAndDisplay(): Promise<void> {
+  const term: string = $("#searchForm-term").val() as string;
   const shows = await getShowsByTerm(term);
 
   $episodesArea.hide();
@@ -99,13 +104,60 @@ $searchForm.on("submit", async function (evt) {
   await searchForShowAndDisplay();
 });
 
-
 /** Given a show ID, get from API and return (promise) array of episodes:
  *      { id, name, season, number }
  */
 
-// async function getEpisodesOfShow(id) { }
+async function getEpisodesOfShow(id: number): Promise<EpisodeInterface[]> {
+  const results = await axios({
+    url: `${TV_MAZE_BASE_URL}shows/${id}/episodes`,
+    method: "get",
+  });
 
-/** Write a clear docstring for this function... */
+  let episodes: EpisodeInterface[] = results.data.map(
+    (result: EpisodeInterface): EpisodeInterface => {
+      return {
+        id: result.id,
+        name: result.name,
+        season: result.season,
+        number: result.number,
+      };
+    }
+  );
 
-// function populateEpisodes(episodes) { }
+  return episodes;
+}
+
+/** Given list of episodes like [{ id, name, season, number },...],
+ * create markup for each and add to DOM */
+
+function populateEpisodes(episodes: EpisodeInterface[]): void {
+  $episodesArea.empty();
+
+  for (let episode of episodes) {
+    const $episode = $(
+      `<li>${episode.name} (season ${episode.season}, number ${episode.number})</li>`
+    );
+    $episodesArea.append($episode);
+  }
+  $episodesArea.show();
+}
+
+/** handler to call API to get episodes and display them on the DOM */
+
+async function episodesHandler(evt: JQuery.ClickEvent): Promise<void> {
+  const showId: number = evt.target.getAttribute("data-show-id");
+  const episodes = await getEpisodesOfShow(showId);
+  populateEpisodes(episodes);
+}
+
+/** event listener for Get Episodes buttons */
+
+$showsList.on(
+  "click",
+  ".Show-getEpisodes",
+  async function (evt: JQuery.ClickEvent) {
+    evt.preventDefault();
+    await episodesHandler(evt);
+  }
+);
